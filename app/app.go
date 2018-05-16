@@ -6,11 +6,10 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/viant/asc"
 	_ "github.com/viant/bgc"
-	_ "github.com/alexbrainman/odbc"
+	"github.com/adrianwit/dstransfer"
 	"flag"
 	"os"
 	"fmt"
-	"github.com/adrianwit/dstransfer"
 )
 
 var port = flag.Int("port", 8080, "service port")
