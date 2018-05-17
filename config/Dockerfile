@@ -6,4 +6,6 @@ ADD . /go/src/github.com/adrianwit/dstransfer/
 WORKDIR /go/src/github.com/adrianwit/dstransfer/app
 RUN go get -u .
 RUN go build -o dstransfer
-CMD ["/go/src/dstransfer/app/dstransfer"]
+RUN mkdir /app
+RUN cp /go/src/github.com/adrianwit/dstransfer/app/dstransfer /app/
+CMD ["/app/dstransfer"]
