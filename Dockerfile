@@ -3,9 +3,9 @@ RUN apk add --no-cache ca-certificates bash gcc git
 RUN apk add --update tzdata curl && rm -rf /var/cache/apk/*
 ENV GOPATH=/go
 ADD . /go/src/github.com/adrianwit/dstransfer/
-WORKDIR /go/src/github.com/adrianwit/dstransfer/app
+WORKDIR /go/src/github.com/adrianwit/dstransfer/dstransfer
 RUN go get -u .
-RUN go build -o dstransfer
+RUN go install
 RUN mkdir /app
-RUN cp /go/src/github.com/adrianwit/dstransfer/app/dstransfer /app/
+RUN cp /go/bin/dstransfer /app/
 CMD ["/app/dstransfer"]
