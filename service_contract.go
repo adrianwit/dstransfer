@@ -77,7 +77,7 @@ type TransferResponse struct {
 	Status      string
 	Error       string
 	ReadCount   int
-	WriteCount  int
+	WriteCount  uint64
 	TimeTakenMs int
 }
 

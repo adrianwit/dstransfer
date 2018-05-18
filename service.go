@@ -4,26 +4,26 @@ import (
 	"github.com/viant/dsc"
 	"fmt"
 	"sync/atomic"
-	"github.com/viant/toolbox"
 )
 
 type Service struct {
 	transfer *TransferResponse
 }
 
-func (s Service) TransferStatus() *TransferResponse {
+func (s *Service) TransferStatus() *TransferResponse {
 	return s.transfer
 }
 
-func (s Service) Transfer(request *TransferRequest) *TransferResponse {
-	toolbox.DumpIndent(request, true)
+func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 	var response = &TransferResponse{
 		Status: "running",
 	}
 	s.transfer = response
 	var err error
 	defer func() {
-		fmt.Errorf("err: %v\n", err)
+		if response.Error == "" {
+			response.Status = "done"
+		}
 	}()
 
 	var task *TransferTask
@@ -44,21 +44,48 @@ func (s Service) Transfer(request *TransferRequest) *TransferResponse {
 	err = s.readData(request, response, task)
 	response.SetError(err)
 	task.WriteDone.Wait()
-	if response.Error == "" {
-		response.Status = "done"
-	}
-
 	return response
 }
 
-func (s Service) writeData(request *TransferRequest, response *TransferResponse, task *TransferTask, transfer *transfer) (err error) {
+func (s *Service) getTargetTable(request *TransferRequest, task *TransferTask, batch []map[string]interface{}) (*dsc.TableDescriptor, error) {
+	table := task.dest.TableDescriptorRegistry().Get(request.Dest.Table)
+	if table == nil {
+		return  nil, fmt.Errorf("target table %v not found", request.Dest.Table)
+	}
+
+	if len(table.PkColumns) == 0 {
+		request.Mode = TransferModeInsert
+	}
+
+	if len(table.Columns) == 0 && len(batch) > 0 {
+		table.Columns = []string{}
+		for k := range batch[0] {
+			table.Columns = append(table.Columns, k)
+		}
+	}
+	return table, nil
+}
+
+func (s *Service) writeData(request *TransferRequest, response *TransferResponse, task *TransferTask, transfer *transfer) (err error) {
 	task.WriteDone.Add(1)
 	defer func() {
 		task.WriteDone.Done()
 		task.SetError(err)
+		if err != nil {
+			transfer.close()
+		}
 	}()
-	var persist func(batch []map[string]interface{}) error;
-	table := task.dest.TableDescriptorRegistry().Get(request.Dest.Table)
+	var persist func(batch []map[string]interface{}) error
+
+	if task.IsReading() { //blocking call
+		transfer.waitForBatch()
+	}
+	batch := transfer.getBatch()
+	var table *dsc.TableDescriptor
+	table, err = s.getTargetTable(request, task, batch)
+	if err != nil {
+		return err
+	}
 	dmlProvider := dsc.NewMapDmlProvider(table)
 	sqlProvider := func(item interface{}) *dsc.ParametrizedSQL {
 		return dmlProvider.Get(dsc.SQLTypeInsert, item)
@@ -79,6 +106,9 @@ func (s Service) writeData(request *TransferRequest, response *TransferResponse,
 				batchItems = append(batchItems, item)
 			}
 			_, err = task.dest.PersistData(connection, batchItems, request.Dest.Table, dmlProvider, sqlProvider);
+			if err == nil {
+				atomic.AddUint64(&response.WriteCount, uint64(len(batch)))
+			}
 			return err
 		}
 	} else {
@@ -92,9 +122,17 @@ func (s Service) writeData(request *TransferRequest, response *TransferResponse,
 			}
 			defer connection.Close()
 			_, _, err = task.dest.PersistAllOnConnection(connection, batch, request.Dest.Table, nil);
+			if err == nil {
+				atomic.AddUint64(&response.WriteCount, uint64(len(batch)))
+			}
 			return err
 		}
 	}
+
+	if err = persist(batch); err != nil {
+		return err
+	}
+
 	for ; ; {
 		if task.HasError() {
 			break
@@ -110,12 +148,12 @@ func (s Service) writeData(request *TransferRequest, response *TransferResponse,
 			return err
 		}
 	}
-	err = persist(transfer.getBatch());
+	err = persist(transfer.getBatch())
 	return err
 }
 
 
-func (s Service) readData(request *TransferRequest, response *TransferResponse, task *TransferTask) error {
+func (s *Service) readData(request *TransferRequest, response *TransferResponse, task *TransferTask) error {
 	atomic.StoreInt32(&task.ReadDone, 0)
 	defer func() {
 		atomic.StoreInt32(&task.ReadDone, 1)
@@ -123,7 +161,8 @@ func (s Service) readData(request *TransferRequest, response *TransferResponse, 
 			transfer.notify()
 		}
 	}()
-	return task.source.ReadAllWithHandler(request.Source.Query, nil, func(scanner dsc.Scanner) (bool, error) {
+	err := task.source.ReadAllWithHandler(request.Source.Query, nil, func(scanner dsc.Scanner) (bool, error) {
+
 		var record = make(map[string]interface{})
 		response.ReadCount++
 		err := scanner.Scan(&record)
@@ -133,6 +172,7 @@ func (s Service) readData(request *TransferRequest, response *TransferResponse, 
 		task.transfers.push(record)
 		return true, nil
 	})
+	return err
 }
 
 func New() *Service {

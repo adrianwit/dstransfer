@@ -6,20 +6,29 @@ import (
 )
 
 type transfer struct {
-	batchSize      uint64
-	records        chan map[string]interface{}
-	batchCompleted chan bool
-	count          uint64
+	closed            int32
+	batchSize         uint64
+	records           chan map[string]interface{}
+	batchCompleted    chan bool
+	transferCompleted chan bool
+
+	count uint64
 }
 
 func (t *transfer) push(record map[string]interface{}) {
+	if t.isClose() {
+		return
+	}
 	result := atomic.AddUint64(&t.count, 1)
 	if result%t.batchSize == 0 {
-
-		t.batchCompleted <- true;
+		t.notify()
 	}
-	t.records <- record
+	select {
+		case t.records <- record:
+		case <-t.transferCompleted:
+	}
 }
+
 
 
 func (t *transfer) notify() {
@@ -29,9 +38,23 @@ func (t *transfer) notify() {
 	}
 }
 
+func (t *transfer) isClose() bool {
+	return atomic.LoadInt32(&t.closed) == 1
+}
+
+func (t *transfer) close() {
+	select {
+		case t.transferCompleted <- true:
+		case <-time.After(time.Millisecond):
+	}
+	atomic.StoreInt32(&t.closed, 1)
+}
+
+
 func (t *transfer) waitForBatch() bool {
 	return <-t.batchCompleted
 }
+
 
 func (t *transfer) getBatch() []map[string]interface{} {
 	var result = []map[string]interface{}{}
@@ -55,9 +78,10 @@ func newTransfer(batchSize int) *transfer {
 		batchSize = 1
 	}
 	return &transfer{
-		batchSize:      uint64(batchSize),
-		records:        make(chan map[string]interface{}, 2*batchSize),
-		batchCompleted: make(chan bool, 1),
+		batchSize:         uint64(batchSize),
+		records:           make(chan map[string]interface{}, 2*batchSize),
+		batchCompleted:    make(chan bool, 1),
+		transferCompleted: make(chan bool, 1),
 	}
 }
 
