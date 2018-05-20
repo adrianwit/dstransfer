@@ -44,6 +44,10 @@ $GOPATH/bin/dstransfer -port=8080
  while :; do clear; curl http://127.0.0.1:8080/v1/api/tasks; sleep 2; done
 ``` 
 
+
+
+**@transfer.json**
+
 ```json
 {
 
