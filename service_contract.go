@@ -44,7 +44,7 @@ type TransferRequest struct {
 	Dest        *Dest
 	WriterCount int
 	BatchSize   int
-	Mode        string
+	Mode        string //
 }
 
 func (r *TransferRequest) Init() error {
