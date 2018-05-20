@@ -23,13 +23,12 @@ func (t *transfer) push(record map[string]interface{}) {
 	if result%t.batchSize == 0 {
 		t.notify()
 	}
+
 	select {
-		case t.records <- record:
-		case <-t.transferCompleted:
+	case t.records <- record:
+	case <-t.transferCompleted:
 	}
 }
-
-
 
 func (t *transfer) notify() {
 	select {
@@ -44,17 +43,15 @@ func (t *transfer) isClose() bool {
 
 func (t *transfer) close() {
 	select {
-		case t.transferCompleted <- true:
-		case <-time.After(time.Millisecond):
+	case t.transferCompleted <- true:
+	case <-time.After(time.Millisecond):
 	}
 	atomic.StoreInt32(&t.closed, 1)
 }
 
-
 func (t *transfer) waitForBatch() bool {
 	return <-t.batchCompleted
 }
-
 
 func (t *transfer) getBatch() []map[string]interface{} {
 	var result = []map[string]interface{}{}
@@ -106,7 +103,7 @@ func newTransfers(writerCount, batchSize int) *transfers {
 		transfers: make([]*transfer, writerCount),
 	}
 	for i := 0; i < writerCount; i++ {
-		result.transfers[i] = newTransfer(writerCount)
+		result.transfers[i] = newTransfer(batchSize)
 	}
 	return result
 }

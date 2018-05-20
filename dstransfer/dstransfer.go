@@ -10,15 +10,25 @@ import (
 	"flag"
 	"os"
 	"fmt"
+	"github.com/google/gops/agent"
+	"log"
 )
 
 var port = flag.Int("port", 8080, "service port")
 
+
 func main() {
+
+
+	go func() {
+		if err := agent.Listen(agent.Options{}); err != nil {
+			log.Fatal(err)
+		}
+	} ()
 	flag.Parse()
 	service := dstransfer.New()
 	server := dstransfer.NewServer(service, *port)
 	go server.StopOnSiginals(os.Interrupt)
-	fmt.Printf("start listening on :%d\n", *port)
+	fmt.Printf("dstransfer listening on :%d\n", *port)
 	server.ListenAndServe()
 }

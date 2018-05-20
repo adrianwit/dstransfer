@@ -1,8 +1,8 @@
 package dstransfer
 
 import (
-	"github.com/viant/dsc"
 	"fmt"
+	"github.com/viant/dsc"
 )
 
 const (
@@ -23,7 +23,6 @@ func (s *Source) Validate() error {
 	}
 	return nil
 }
-
 
 type Dest struct {
 	*dsc.Config
@@ -58,8 +57,6 @@ func (r *TransferRequest) Init() error {
 	return nil
 }
 
-
-
 func (r *TransferRequest) Validate() error {
 	if r.Source == nil {
 		return fmt.Errorf("source was empty")
@@ -70,15 +67,13 @@ func (r *TransferRequest) Validate() error {
 	if r.Dest == nil {
 		return fmt.Errorf("source was empty")
 	}
-	return r.Dest.Validate();
+	return r.Dest.Validate()
 }
 
 type TransferResponse struct {
-	Status      string
-	Error       string
-	ReadCount   int
-	WriteCount  uint64
-	TimeTakenMs int
+	TaskId int
+	Status string
+	Error  string
 }
 
 func (r *TransferResponse) SetError(err error) {
@@ -87,4 +82,8 @@ func (r *TransferResponse) SetError(err error) {
 	}
 	r.Status = "error"
 	r.Error = err.Error()
+}
+
+type TasksResponse struct {
+	Tasks Tasks
 }

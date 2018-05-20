@@ -1,9 +1,9 @@
 package dstransfer
 
 import (
-	"net/http"
-	"github.com/viant/toolbox"
 	"fmt"
+	"github.com/viant/toolbox"
+	"net/http"
 )
 
 const baseURI = "/v1/api"
@@ -14,10 +14,10 @@ type Router struct {
 }
 
 func (r Router) route() {
-	r.ServeMux.Handle(baseURI + "/", r.api())
+	r.ServeMux.Handle(baseURI+"/", r.api())
 	r.ServeMux.Handle("/", r.static())
+	r.ServeMux.Handle("/status", r.status())
 }
-
 
 func (r Router) api() http.Handler {
 	router := toolbox.NewServiceRouter(
@@ -29,21 +29,20 @@ func (r Router) api() http.Handler {
 		},
 		toolbox.ServiceRouting{
 			HTTPMethod: "GET",
-			URI:        fmt.Sprintf("%v/transfer", baseURI),
-			Handler:    r.service.TransferStatus,
+			URI:        fmt.Sprintf("%v/tasks", baseURI),
+			Handler:    r.service.Tasks,
 			Parameters: []string{},
 		},
 	)
 	return http.HandlerFunc(func(writer http.ResponseWriter, reader *http.Request) {
 		defer func() {
-			fmt.Printf("Done:\n")
 			if r := recover(); r != nil {
 				var err = fmt.Errorf("%v", r)
 				http.Error(writer, err.Error(), 500)
 			}
 		}()
 
-		if err := router.Route(writer, reader);err != nil {
+		if err := router.Route(writer, reader); err != nil {
 			http.Error(writer, err.Error(), 500)
 		}
 	})
@@ -51,6 +50,12 @@ func (r Router) api() http.Handler {
 
 func (r Router) static() http.Handler {
 	return http.FileServer(http.Dir("static"))
+}
+
+func (r Router) status() http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Write([]byte("ok"))
+	})
 }
 
 func NewRouter(dummyService *Service) http.Handler {
