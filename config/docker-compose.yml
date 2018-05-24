@@ -8,3 +8,4 @@ services:
       - 8080:8080
     volumes:
       - ${HOME}/.secret/:/root/.secret/
+    network_mode: bridge
