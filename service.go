@@ -113,8 +113,8 @@ func (s *Service) writeData(request *TransferRequest, response *TransferResponse
 	var count = 0
 	defer func() {
 		task.isWriteCompleted.Done()
-		task.SetError(err)
 		if err != nil {
+			task.SetError(err)
 			response.SetError(err)
 			transfer.close()
 		}
