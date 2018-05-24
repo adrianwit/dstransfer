@@ -33,6 +33,12 @@ func (r Router) api() http.Handler {
 			Handler:    r.service.Tasks,
 			Parameters: []string{},
 		},
+		toolbox.ServiceRouting{
+			HTTPMethod: "GET",
+			URI:        fmt.Sprintf("%v/task/{id}", baseURI),
+			Handler:    r.service.Task,
+			Parameters: []string{"id", "@httpResponseWriter"},
+		},
 	)
 	return http.HandlerFunc(func(writer http.ResponseWriter, reader *http.Request) {
 		defer func() {

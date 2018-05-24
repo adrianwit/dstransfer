@@ -44,10 +44,11 @@ func (s *Service) Task(id int, writer http.ResponseWriter) *TransferTask {
 	return response
 }
 
+
 func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 	var response = &TransferResponse{Status: "ok"}
 	rand.Seed((time.Now().UTC().UnixNano()))
-	response.TaskId = rand.Int()
+	response.TaskId = int(rand.Int31())
 	var task *TransferTask
 	var err error
 	if err = request.Init(); err == nil {
@@ -59,10 +60,12 @@ func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 		response.SetError(err)
 		return response
 	}
-	s.mux.Lock()
-	s.tasks[response.TaskId] = task
-	s.mux.Unlock()
 
+	s.mux.Lock()
+	task.ID = response.TaskId
+	s.tasks[task.ID] = task
+	s.mux.Unlock()
+	task.Request = request
 	go s.transferInBackground(request, response, task)
 	return response
 }
@@ -70,7 +73,8 @@ func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 func (s *Service) transferInBackground(request *TransferRequest, response *TransferResponse, task *TransferTask) {
 	var err error
 	defer func() {
-		task.EndTime = time.Now()
+		var endTime = time.Now()
+		task.EndTime = &endTime
 		task.TimeTakenMs = int(task.EndTime.Sub(task.StartTime) / time.Millisecond)
 		if response.Error == "" {
 			task.Status = "done"
@@ -193,18 +197,24 @@ func (s *Service) writeData(request *TransferRequest, response *TransferResponse
 
 func (s *Service) readData(request *TransferRequest, response *TransferResponse, task *TransferTask) error {
 	atomic.StoreInt32(&task.isReadCompleted, 0)
+	var err error
 	defer func() {
 		atomic.StoreInt32(&task.isReadCompleted, 1)
+		if err != nil {
+			task.SetError(err)
+			response.SetError(err)
+		}
 		for _, transfer := range task.transfers.transfers {
 			transfer.notify()
 		}
 	}()
-	err := task.source.ReadAllWithHandler(request.Source.Query, nil, func(scanner dsc.Scanner) (bool, error) {
+	err = task.source.ReadAllWithHandler(request.Source.Query, nil, func(scanner dsc.Scanner) (bool, error) {
 		if task.HasError() {
 			return false, nil
 		}
 		var record = make(map[string]interface{})
 		task.ReadCount++
+
 		err := scanner.Scan(&record)
 		if err != nil {
 			return false, fmt.Errorf("failed to scan:%v", err)
@@ -212,6 +222,7 @@ func (s *Service) readData(request *TransferRequest, response *TransferResponse,
 		task.transfers.push(record)
 		return true, nil
 	})
+
 	return err
 }
 

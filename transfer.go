@@ -49,8 +49,11 @@ func (t *transfer) close() {
 	atomic.StoreInt32(&t.closed, 1)
 }
 
-func (t *transfer) waitForBatch() bool {
-	return <-t.batchCompleted
+func (t *transfer) waitForBatch() {
+	select {
+	case <-t.batchCompleted:
+	case <-t.transferCompleted:
+	}
 }
 
 func (t *transfer) getBatch() []map[string]interface{} {

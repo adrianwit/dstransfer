@@ -19,7 +19,6 @@ var port = flag.Int("port", 8080, "service port")
 
 func main() {
 
-
 	go func() {
 		if err := agent.Listen(agent.Options{}); err != nil {
 			log.Fatal(err)

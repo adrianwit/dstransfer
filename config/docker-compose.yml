@@ -6,3 +6,5 @@ services:
     command: ["/app/dstransfer"]
     ports:
       - 8080:8080
+    volumes:
+      - ${HOME}/.secret/:/root/.secret/

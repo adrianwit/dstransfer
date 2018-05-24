@@ -15,8 +15,10 @@ type TransferTask struct {
 	isReadCompleted  int32
 	isWriteCompleted *sync.WaitGroup
 	hasError         int32
+	ID               int
+	Request          *TransferRequest
 	StartTime        time.Time
-	EndTime          time.Time
+	EndTime          *time.Time
 	Error            string
 	Status           string
 
@@ -31,10 +33,10 @@ func (t *TransferTask) IsReading() bool {
 }
 
 func (t *TransferTask) CanEvict() bool {
-	if t.EndTime.Before(t.StartTime) {
+	if t.EndTime == nil {
 		return false
 	}
-	return time.Now().Sub(t.EndTime) > time.Minute
+	return time.Now().Sub(*t.EndTime) > time.Minute
 }
 
 //IsReading returns true if error occured
@@ -48,6 +50,7 @@ func (t *TransferTask) SetError(err error) {
 	}
 	atomic.StoreInt32(&t.hasError, 1)
 	t.Error = err.Error()
+	t.Status = "error"
 	t.transfers.close()
 }
 
