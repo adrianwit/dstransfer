@@ -79,7 +79,7 @@ func newTransfer(batchSize int) *transfer {
 	}
 	return &transfer{
 		batchSize:         uint64(batchSize),
-		records:           make(chan map[string]interface{}, batchSize + 1 + int(0.5 *batchSize)),
+		records:           make(chan map[string]interface{}, batchSize + 1 + int(0.5 *float64(batchSize))),
 		batchCompleted:    make(chan bool, 1),
 		transferCompleted: make(chan bool, 1),
 	}
