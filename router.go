@@ -47,7 +47,6 @@ func (r Router) api() http.Handler {
 				http.Error(writer, err.Error(), 500)
 			}
 		}()
-
 		if err := router.Route(writer, reader); err != nil {
 			http.Error(writer, err.Error(), 500)
 		}

@@ -1,3 +1,3 @@
-{"address":{"city":"Los Angeles","postcode":"90038","state":"ca"},"email":"user1@hotmail.com","id":1,"name":"user1"}
-{"address":{"city":"New York","postcode":"10030","state":"ny"},"email":"user2@hotmail.com","id":2,"name":"user2"}
-{"address":{"city":"Los Vegas","postcode":"88901","state":"ne"},"email":"user3@hotmail.com","id":3,"name":"user3"}
+{"email":"user1@hotmail.com","id":1,"name":"user1","state":"ca"}
+{"email":"user2@hotmail.com","id":2,"name":"user2","state":"ny"}
+{"email":"user3@hotmail.com","id":3,"name":"user3","state":"ne"}
