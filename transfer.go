@@ -73,13 +73,16 @@ outer:
 	return result
 }
 
-func newTransfer(batchSize int) *transfer {
+func newTransfer(batchSize int, queueBufferFactor float32) *transfer {
 	if batchSize == 0 {
 		batchSize = 1
 	}
+	if queueBufferFactor < 1 {
+		queueBufferFactor = 1.5
+	}
 	return &transfer{
 		batchSize:         uint64(batchSize),
-		records:           make(chan map[string]interface{}, batchSize + 1 + int(0.5 *float64(batchSize))),
+		records:           make(chan map[string]interface{}, batchSize+int(queueBufferFactor*float32(batchSize))),
 		batchCompleted:    make(chan bool, 1),
 		transferCompleted: make(chan bool, 1),
 	}
@@ -101,12 +104,12 @@ func (t *transfers) close() {
 	}
 }
 
-func newTransfers(writerCount, batchSize int) *transfers {
+func newTransfers(writerCount, batchSize int, queueBufferFactor float32) *transfers {
 	var result = &transfers{
 		transfers: make([]*transfer, writerCount),
 	}
 	for i := 0; i < writerCount; i++ {
-		result.transfers[i] = newTransfer(batchSize)
+		result.transfers[i] = newTransfer(batchSize, queueBufferFactor)
 	}
 	return result
 }

@@ -44,7 +44,8 @@ type TransferRequest struct {
 	Dest        *Dest
 	WriterCount int
 	BatchSize   int
-	Mode        string //
+	Mode        string
+	QueueBufferFactor float32
 }
 
 func (r *TransferRequest) Init() error {
@@ -68,6 +69,22 @@ func (r *TransferRequest) Validate() error {
 		return fmt.Errorf("source was empty")
 	}
 	return r.Dest.Validate()
+}
+
+func (r *TransferRequest) Clone() *TransferRequest {
+	return &TransferRequest{
+		Source: &Source{
+			Query:r.Source.Query,
+			Config:r.Source.Config,
+		},
+		Dest: &Dest{
+			Table:r.Dest.Table,
+			Config:r.Dest.Config,
+		},
+		WriterCount: r.WriterCount,
+		BatchSize:   r.BatchSize,
+		Mode:        r.Mode,
+	}
 }
 
 type TransferResponse struct {
