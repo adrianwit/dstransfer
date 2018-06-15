@@ -91,10 +91,15 @@ func newTransfer(batchSize int, queueBufferFactor float32) *transfer {
 type transfers struct {
 	transfers []*transfer
 	index     uint64
+	batchSize int
+	count uint64
 }
 
 func (t *transfers) push(record map[string]interface{}) {
-	index := int(atomic.AddUint64(&t.index, 1)) % len(t.transfers)
+	var index  = int(atomic.LoadUint64(&t.index))
+	if int(atomic.AddUint64(&t.count, 1)) % t.batchSize == 0 {
+		index = int(atomic.AddUint64(&t.index, 1)) % len(t.transfers)
+	}
 	t.transfers[index].push(record)
 }
 
@@ -106,6 +111,7 @@ func (t *transfers) close() {
 
 func newTransfers(writerCount, batchSize int, queueBufferFactor float32) *transfers {
 	var result = &transfers{
+		batchSize:batchSize,
 		transfers: make([]*transfer, writerCount),
 	}
 	for i := 0; i < writerCount; i++ {
