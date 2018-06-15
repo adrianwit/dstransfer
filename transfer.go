@@ -96,7 +96,8 @@ type transfers struct {
 }
 
 func (t *transfers) push(record map[string]interface{}) {
-	var index  = int(atomic.LoadUint64(&t.index))
+	var index  = int(atomic.LoadUint64(&t.index)) % len(t.transfers)
+
 	if int(atomic.AddUint64(&t.count, 1)) % t.batchSize == 0 {
 		index = int(atomic.AddUint64(&t.index, 1)) % len(t.transfers)
 	}
