@@ -56,7 +56,7 @@ func (t *TransferTask) SetError(err error) {
 
 func NewTransferTask(request *TransferRequest) (*TransferTask, error) {
 	var task = &TransferTask{
-		transfers:        newTransfers(request.WriterCount, request.BatchSize, request.QueueBufferFactor),
+		transfers:        newTransfers(request),
 		isWriteCompleted: &sync.WaitGroup{},
 		StartTime:        time.Now(),
 		Status:           "running",

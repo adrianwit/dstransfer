@@ -9,7 +9,7 @@ import (
 )
 
 func TestService_Transfer(t *testing.T) {
-	toolbox.RemoveFileIfExist("test/transfer/test_users.json")
+	_ = toolbox.RemoveFileIfExist("test/transfer/test_users.json")
 	config, err := dsc.NewConfigFromURL("test/config.yaml")
 	if !assert.Nil(t, err) {
 		return

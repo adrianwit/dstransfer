@@ -1,90 +1,74 @@
 package dstransfer
 
 import (
+	"fmt"
+	"github.com/viant/toolbox"
+	"github.com/viant/toolbox/data"
 	"sync/atomic"
 	"time"
 )
 
 type transfer struct {
-	closed            int32
-	batchSize         uint64
-	records           chan map[string]interface{}
-	batchCompleted    chan bool
-	transferCompleted chan bool
-
-	count uint64
+	closed     int32
+	batchSize  uint64
+	collection *data.CompactedSlice
+	isFlushed  chan bool
+	batches    chan *transferBatch
+	count      uint64
 }
 
-func (t *transfer) push(record map[string]interface{}) {
-	if t.isClose() {
-		return
+func (t *transfer) push(record map[string]interface{}) error {
+	if t.isClosed() {
+		return fmt.Errorf("transfer is closed")
 	}
+	t.collection.Add(record)
 	result := atomic.AddUint64(&t.count, 1)
 	if result%t.batchSize == 0 {
-		t.notify()
+		t.batches <- newBatch(t.collection)
 	}
-
-	select {
-	case t.records <- record:
-	case <-t.transferCompleted:
-	}
+	return nil
 }
 
-func (t *transfer) notify() {
-	select {
-	case t.batchCompleted <- true:
-	case <-time.After(time.Millisecond):
-	}
-}
-
-func (t *transfer) isClose() bool {
+func (t *transfer) isClosed() bool {
 	return atomic.LoadInt32(&t.closed) == 1
 }
 
-func (t *transfer) close() {
+func (t *transfer) flush() {
 	select {
-	case t.transferCompleted <- true:
+	case t.isFlushed <- true:
 	case <-time.After(time.Millisecond):
 	}
+}
+
+func (t *transfer) close() {
 	atomic.StoreInt32(&t.closed, 1)
+	t.flush()
 }
 
-func (t *transfer) waitForBatch() {
-	select {
-	case <-t.batchCompleted:
-	case <-t.transferCompleted:
-	}
-}
-
-func (t *transfer) getBatch() []map[string]interface{} {
-	var result = []map[string]interface{}{}
-outer:
-	for i := 0; i < int(t.batchSize); i++ {
+func (t *transfer) getBatch() *transferBatch {
+	if t.isClosed() {
 		select {
-		case item := <-t.records:
-			if item == nil {
-				break outer
-			}
-			result = append(result, item)
-		case <-time.After(300 * time.Millisecond):
-			break outer
+		case b := <-t.batches:
+			return b
+		case <-time.After(time.Millisecond):
 		}
+		return newBatch(t.collection)
 	}
-	return result
+
+	select {
+	case b := <-t.batches:
+		return b
+	case <-t.isFlushed:
+		return newBatch(t.collection)
+	}
 }
 
-func newTransfer(batchSize int, queueBufferFactor float32) *transfer {
-	if batchSize == 0 {
-		batchSize = 1
-	}
-	if queueBufferFactor < 1 {
-		queueBufferFactor = 1.5
-	}
+func newTransfer(request *TransferRequest) *transfer {
 	return &transfer{
-		batchSize:         uint64(batchSize),
-		records:           make(chan map[string]interface{}, batchSize+int(queueBufferFactor*float32(batchSize))),
-		batchCompleted:    make(chan bool, 1),
-		transferCompleted: make(chan bool, 1),
+		batchSize:  uint64(request.BatchSize),
+		collection: data.NewCompactedSlice(request.OmitEmpty, true),
+		batches:    make(chan *transferBatch, 1),
+		isFlushed:  make(chan bool, 1),
 	}
 }
 
@@ -92,31 +76,58 @@ type transfers struct {
 	transfers []*transfer
 	index     uint64
 	batchSize int
-	count uint64
+	count     uint64
 }
 
-func (t *transfers) push(record map[string]interface{}) {
-	var index  = int(atomic.LoadUint64(&t.index)) % len(t.transfers)
-
-	if int(atomic.AddUint64(&t.count, 1)) % t.batchSize == 0 {
-		index = int(atomic.AddUint64(&t.index, 1)) % len(t.transfers)
+func (t *transfers) push(record map[string]interface{}) error {
+	var index = int(atomic.LoadUint64(&t.index)) % len(t.transfers)
+	count := int(atomic.AddUint64(&t.count, 1))
+	if count%t.batchSize == 0 {
+		index = (int(atomic.AddUint64(&t.index, 1)) - 1) % len(t.transfers)
 	}
-	t.transfers[index].push(record)
+	return t.transfers[index].push(record)
 }
 
 func (t *transfers) close() {
 	for _, transfer := range t.transfers {
-		transfer.notify()
+		transfer.close()
 	}
 }
 
-func newTransfers(writerCount, batchSize int, queueBufferFactor float32) *transfers {
-	var result = &transfers{
-		batchSize:batchSize,
-		transfers: make([]*transfer, writerCount),
+func (t *transfers) flush() {
+	for _, transfer := range t.transfers {
+		transfer.flush()
 	}
-	for i := 0; i < writerCount; i++ {
-		result.transfers[i] = newTransfer(batchSize, queueBufferFactor)
+}
+
+func newTransfers(request *TransferRequest) *transfers {
+	if request.WriterThreads == 0 {
+		request.WriterThreads = 1
+	}
+	if request.BatchSize == 0 {
+		request.BatchSize = 1
+	}
+	var result = &transfers{
+		batchSize: request.BatchSize,
+		transfers: make([]*transfer, request.WriterThreads),
+	}
+	for i := 0; i < request.WriterThreads; i++ {
+		result.transfers[i] = newTransfer(request)
 	}
 	return result
+}
+
+type transferBatch struct {
+	fields []*data.Field
+	size   int
+	ranger toolbox.Ranger
+}
+
+func newBatch(collection *data.CompactedSlice) *transferBatch {
+	size := collection.Size()
+	return &transferBatch{
+		size:   size,
+		ranger: collection.Ranger(),
+		fields: collection.Fields(),
+	}
 }

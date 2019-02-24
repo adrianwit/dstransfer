@@ -1,5 +1,16 @@
 # dstransfer - simple cross datastore ETL SQL based transfer
 
+## Motivation
+
+Traditionally transferring data between different vendor data sources involved data export to text file i.e csv, 
+followed by importing it to destination database. While this may work for the most scenarios, representing null values 
+and converting incompatible data types like DATE/TIMESTAMP could be challenging.
+
+This project provide a simple SQL based alternative addressing these concerns.
+It copies data between arbitrary database/datastore (RDBMS/NoSQL) in a way that is both memory and writes optimized. 
+While the first streamlining is achieved with using compacted slices as opposed to generic slice of a map, the latter
+uses batch insert and concurrent writers.
+
 
 ## Installation
 
@@ -20,7 +31,10 @@ cd /tmp/dstransfer/config/ && docker-compose up  -d
 
 ### Standalone
 
+
 - **Building app**
+
+Prerequisites: go 1.11+
 
 ```bash
 export GOPATH=~/go
@@ -52,7 +66,7 @@ $GOPATH/bin/dstransfer -port=8080
 {
 
   "BatchSize": 256,
-  "WriterCount": 4,
+  "WriterThreads": 4,
   "Mode": "insert",
 
   "Source": {
@@ -110,8 +124,12 @@ Already imported drivers:
  - postgresql
  - aerospike
  - bigquery
- - mongo
+ - mongodb
+ - casandra
+ - dynamodb
+ - firebase
+ - firestore
   
 ## Transfer mode
  - **insert**  use only INSERT INTO statement (suitable as append)
- - **persist** determine which record needs to be updated or inserted
+ - **persist** determine which record needs to be updated or inserted(slower option)

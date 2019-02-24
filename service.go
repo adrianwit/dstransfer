@@ -44,7 +44,6 @@ func (s *Service) Task(id int, writer http.ResponseWriter) *TransferTask {
 	return response
 }
 
-
 func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 	var response = &TransferResponse{Status: "ok"}
 	rand.Seed((time.Now().UTC().UnixNano()))
@@ -60,7 +59,6 @@ func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 		response.SetError(err)
 		return response
 	}
-
 	s.mux.Lock()
 	task.ID = response.TaskId
 	s.tasks[task.ID] = task
@@ -83,7 +81,7 @@ func (s *Service) transferInBackground(request *TransferRequest, response *Trans
 	if err != nil {
 		response.SetError(err)
 	}
-	for i := 0; i < request.WriterCount; i++ {
+	for i := 0; i < request.WriterThreads; i++ {
 		go s.writeData(request, response, task, task.transfers.transfers[i])
 	}
 	err = s.readData(request, response, task)
@@ -91,7 +89,7 @@ func (s *Service) transferInBackground(request *TransferRequest, response *Trans
 	task.isWriteCompleted.Wait()
 }
 
-func (s *Service) getTargetTable(request *TransferRequest, task *TransferTask, batch []map[string]interface{}) (*dsc.TableDescriptor, error) {
+func (s *Service) getTargetTable(request *TransferRequest, task *TransferTask, batch *transferBatch) (*dsc.TableDescriptor, error) {
 	table := task.dest.TableDescriptorRegistry().Get(request.Dest.Table)
 	if table == nil {
 		return nil, fmt.Errorf("target table %v not found", request.Dest.Table)
@@ -99,16 +97,17 @@ func (s *Service) getTargetTable(request *TransferRequest, task *TransferTask, b
 	if len(table.PkColumns) == 0 {
 		request.Mode = TransferModeInsert
 	}
-	if len(table.Columns) == 0 && len(batch) > 0 {
+	if len(table.Columns) == 0 && batch.size > 0 {
 		table.Columns = []string{}
-		for k := range batch[0] {
-			table.Columns = append(table.Columns, k)
+		for _, field := range batch.fields {
+			table.Columns = append(table.Columns, field.Name)
 		}
 	}
 	return table, nil
 }
 
-func (s *Service) writeData(request *TransferRequest, response *TransferResponse, task *TransferTask, transfer *transfer) (err error) {
+func (s *Service) writeData(request *TransferRequest, response *TransferResponse, task *TransferTask, transfer *transfer) {
+	var err error
 	task.isWriteCompleted.Add(1)
 	var count = 0
 	defer func() {
@@ -119,16 +118,12 @@ func (s *Service) writeData(request *TransferRequest, response *TransferResponse
 			transfer.close()
 		}
 	}()
-	var persist func(batch []map[string]interface{}) error
-
-	if task.IsReading() { //blocking call
-		transfer.waitForBatch()
-	}
+	var persist func(batch *transferBatch) error
 	batch := transfer.getBatch()
 	var table *dsc.TableDescriptor
 	table, err = s.getTargetTable(request, task, batch)
 	if err != nil {
-		return err
+		return
 	}
 	dmlProvider := dsc.NewMapDmlProvider(table)
 	sqlProvider := func(item interface{}) *dsc.ParametrizedSQL {
@@ -137,62 +132,54 @@ func (s *Service) writeData(request *TransferRequest, response *TransferResponse
 
 	connection, err := task.dest.ConnectionProvider().Get()
 	if err != nil {
-		return err
+		return
 	}
 	defer connection.Close()
 
 	if request.Mode == TransferModeInsert {
-		persist = func(batch []map[string]interface{}) error {
-			if len(batch) == 0 {
+		persist = func(batch *transferBatch) error {
+			if batch.size == 0 {
 				return nil
 			}
 			if err != nil {
 				return err
 			}
-			var batchItems = []interface{}{}
-			for _, item := range batch {
-				batchItems = append(batchItems, item)
-			}
-			_, err = task.dest.PersistData(connection, batchItems, request.Dest.Table, dmlProvider, sqlProvider)
+			_, err = task.dest.PersistData(connection, batch.ranger, request.Dest.Table, dmlProvider, sqlProvider)
 			if err == nil {
-				atomic.AddUint64(&task.WriteCount, uint64(len(batch)))
+				atomic.AddUint64(&task.WriteCount, uint64(batch.size))
 			}
-			count += len(batch)
+			count += batch.size
 			return err
 		}
 	} else {
-		persist = func(batch []map[string]interface{}) error {
-			if len(batch) == 0 {
+		persist = func(batch *transferBatch) error {
+			if batch.size == 0 {
 				return nil
 			}
 			_, _, err = task.dest.PersistAllOnConnection(connection, batch, request.Dest.Table, nil)
 			if err == nil {
-				atomic.AddUint64(&task.WriteCount, uint64(len(batch)))
-				count += len(batch)
+				atomic.AddUint64(&task.WriteCount, uint64(batch.size))
+				count += batch.size
 			}
 			return err
 		}
 	}
 	if err = persist(batch); err != nil {
-		return err
+		return
 	}
 	for {
 		if task.HasError() {
 			break
 		}
-		if task.IsReading() { //blocking call
-			transfer.waitForBatch()
-		}
 		batch := transfer.getBatch()
-		if len(batch) == 0 && !task.IsReading() {
+		if batch.size == 0 && !task.IsReading() {
 			break
 		}
 		if err = persist(batch); err != nil {
-			return err
+			return
 		}
 	}
 	err = persist(transfer.getBatch())
-	return err
 }
 
 func (s *Service) readData(request *TransferRequest, response *TransferResponse, task *TransferTask) error {
@@ -205,9 +192,10 @@ func (s *Service) readData(request *TransferRequest, response *TransferResponse,
 			response.SetError(err)
 		}
 		for _, transfer := range task.transfers.transfers {
-			transfer.notify()
+			transfer.close()
 		}
 	}()
+
 	err = task.source.ReadAllWithHandler(request.Source.Query, nil, func(scanner dsc.Scanner) (bool, error) {
 		if task.HasError() {
 			return false, nil
@@ -219,8 +207,8 @@ func (s *Service) readData(request *TransferRequest, response *TransferResponse,
 		if err != nil {
 			return false, fmt.Errorf("failed to scan:%v", err)
 		}
-		task.transfers.push(record)
-		return true, nil
+		err = task.transfers.push(record)
+		return err == nil, err
 	})
 
 	return err
