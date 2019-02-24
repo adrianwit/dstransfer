@@ -37,13 +37,12 @@ cd /tmp/dstransfer/config/ && docker-compose up  -d
 Prerequisites: go 1.11+
 
 ```bash
-export GOPATH=~/go
-go get -u github.com/adrianwit/dstransfer
-go get -u github.com/adrianwit/dstransfer/dstransfer
+go install github.com/adrianwit/dstransfer/dstransfer
 ```
 
 - **Starting app**
 ```bash
+export GOPATH=~/go/bin/
 $GOPATH/bin/dstransfer -port=8080
 ```
 
