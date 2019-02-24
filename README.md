@@ -7,7 +7,7 @@ followed by importing it to destination database. While this may work for the mo
 and converting incompatible data types like DATE/TIMESTAMP could be challenging.
 
 This project provides a simple SQL based alternative addressing these concerns.
-It copies data between arbitrary database/datastore (RDBMS/NoSQL) in a way that is both memory and writes optimized. 
+On top of that it copies data between arbitrary database/datastore (RDBMS/NoSQL) in a way that is both memory and writes optimized. 
 While the first streamlining is achieved with using compacted slices as opposed to generic slice of a map, the latter
 uses batch insert and concurrent writers.
 
