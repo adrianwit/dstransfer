@@ -128,7 +128,12 @@ Already imported drivers:
  - dynamodb
  - firebase
  - firestore
+ 
+## Supported but not imported drivers (CGO dependency)
+ - oracle
+ - vertica (vi odbc)
   
+
 ## Transfer mode
  - **insert**  use only INSERT INTO statement (suitable as append)
  - **persist** determine which record needs to be updated or inserted(slower option)
