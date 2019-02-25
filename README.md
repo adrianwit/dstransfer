@@ -131,7 +131,7 @@ Already imported drivers:
  
 ## Supported but not imported drivers (CGO dependency)
  - oracle
- - vertica (vi odbc)
+ - vertica (via odbc)
   
 
 ## Transfer mode
