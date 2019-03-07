@@ -31,6 +31,7 @@ type TransferRequest struct {
 	OmitEmpty     bool   `description:"if set set null for any 0 or empty values"`
 }
 
+
 //TransferResponse transfer response
 type TransferResponse struct {
 	TaskId int

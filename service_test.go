@@ -25,7 +25,7 @@ func TestService_Transfer(t *testing.T) {
 		},
 		Mode: TransferModeInsert,
 	}
-	service := New()
+	service := New(false, nil)
 	assert.NotNil(t, service)
 	response := service.Transfer(request)
 	assert.NotNil(t, response)

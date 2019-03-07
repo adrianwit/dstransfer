@@ -14,6 +14,9 @@ import (
 type Service struct {
 	mux   *sync.RWMutex
 	tasks map[int]*TransferTask
+	interactive bool
+	callback 	  func(task *TransferTask)
+
 }
 
 func (s *Service) Tasks() *TasksResponse {
@@ -64,11 +67,15 @@ func (s *Service) Transfer(request *TransferRequest) *TransferResponse {
 	s.tasks[task.ID] = task
 	s.mux.Unlock()
 	task.Request = request
-	go s.transferInBackground(request, response, task)
+	if s.interactive {
+		s.transfer(request, response, task)
+	} else {
+		go s.transfer(request, response, task)
+	}
 	return response
 }
 
-func (s *Service) transferInBackground(request *TransferRequest, response *TransferResponse, task *TransferTask) {
+func (s *Service) transfer(request *TransferRequest, response *TransferResponse, task *TransferTask) {
 	var err error
 	defer func() {
 		var endTime = time.Now()
@@ -87,6 +94,9 @@ func (s *Service) transferInBackground(request *TransferRequest, response *Trans
 	err = s.readData(request, response, task)
 	response.SetError(err)
 	task.isWriteCompleted.Wait()
+	if s.callback != nil {
+		s.callback(task)
+	}
 }
 
 func (s *Service) getTargetTable(request *TransferRequest, task *TransferTask, batch *transferBatch) (*dsc.TableDescriptor, error) {
@@ -214,8 +224,10 @@ func (s *Service) readData(request *TransferRequest, response *TransferResponse,
 	return err
 }
 
-func New() *Service {
+func New(interactive bool, callback func(task *TransferTask)) *Service {
 	return &Service{
+		interactive:interactive,
+		callback:callback,
 		mux:   &sync.RWMutex{},
 		tasks: make(map[int]*TransferTask),
 	}
