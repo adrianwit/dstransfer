@@ -1,4 +1,4 @@
-module dstransfer
+module github.com/adrianwit/dstransfer
 
 require (
 	cloud.google.com/go v0.36.0 // indirect

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"dstransfer"
+	"github.com/adrianwit/dstransfer"
 	"flag"
 	"fmt"
 	_ "github.com/adrianwit/fbc"
