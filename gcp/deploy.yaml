@@ -1,0 +1,10 @@
+defaults:
+  credentials: e2e
+pipeline:
+  deploy:
+    action: gcp/cloudfunctions:deploy
+    '@name': Transfer
+    entryPoint: TransferFn
+    runtime: go111
+    source:
+      URL: $WorkingDirectory('.')

@@ -46,6 +46,17 @@ export GOPATH=~/go/bin/
 $GOPATH/bin/dstransfer -port=8080
 ```
 
+### Cloud functions
+```bash
+ cd /tmp/ && git clone https://github.com/adrianwit/dstransfer
+ cd dstransfer/gcp
+ go mod vendor
+ gcloud functions deploy Transfer --entry-point TransferFn --runtime go111 --trigger-http
+ # OR 
+ endly -r=deploy 
+```
+
+
 ## Usage
 
 ```bash
