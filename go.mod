@@ -1,5 +1,7 @@
 module github.com/adrianwit/dstransfer
 
+go 1.12
+
 require (
 	cloud.google.com/go v0.37.0 // indirect
 	firebase.google.com/go v3.6.0+incompatible // indirect
