@@ -84,6 +84,8 @@ func (s *Service) transfer(request *TransferRequest, response *TransferResponse,
 		if response.Error == "" {
 			task.Status = "done"
 		}
+		_ = task.source.ConnectionProvider().Close()
+		_ = task.dest.ConnectionProvider().Close()
 	}()
 	if err != nil {
 		response.SetError(err)
